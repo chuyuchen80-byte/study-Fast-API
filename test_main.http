@@ -1,0 +1,22 @@
+POST http://127.0.0.1:8000/user/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "123456"
+}
+
+###
+
+POST http://127.0.0.1:8000/user/login
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "123456"
+}
+
+###
+
+GET http://127.0.0.1:8000/user/list
+Accept: application/json
