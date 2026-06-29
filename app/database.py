@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = "mysql+aiomysql://root:root@localhost/fast_api_blog?charset=utf8mb4"
+from app.config import DATABASE_URL
 
 engine = create_async_engine(
     DATABASE_URL,

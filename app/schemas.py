@@ -36,11 +36,6 @@ class TokenData(BaseModel):
 # ── Post schemas ──────────────────────────────────────────
 
 
-class PostCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=100, description="帖子标题")
-    content: str = Field(min_length=1, description="帖子内容")
-
-
 class PostUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=100)
     content: str | None = None

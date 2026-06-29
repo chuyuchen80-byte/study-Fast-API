@@ -10,10 +10,10 @@ from sqlalchemy.orm import joinedload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import Comment, Post, PostImage, User
+from app.config import UPLOAD_DIR
 from app.schemas import (
     CommentCreate,
     CommentResponse,
-    PostCreate,
     PostImageResponse,
     PostListResponse,
     PostResponse,
@@ -21,9 +21,6 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/posts", tags=["posts"])
-
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 # ── helper ────────────────────────────────────────────────
@@ -141,18 +138,9 @@ async def get_post(
     post_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """获取帖子详情（公开，含评论列表）"""
+    """获取帖子详情（公开）"""
     post = await _get_post_or_404(post_id, db)
     comment_count = await _count_comments(post_id, db)
-
-    # 加载评论
-    comments_result = await db.execute(
-        select(Comment)
-        .options(joinedload(Comment.user))
-        .where(Comment.post_id == post_id)
-        .order_by(Comment.created_at.asc())
-    )
-    comments = comments_result.unique().scalars().all()
 
     return PostResponse(
         id=post.id,
