@@ -1,6 +1,6 @@
-# FastAPI Blog — 全栈论坛系统
+# FastAPI Blog v2.0 — 全栈论坛系统
 
-基于 **FastAPI + Vue 3** 的全栈博客/论坛项目，支持用户注册登录、发帖、评论、图片上传。
+基于 **FastAPI + Vue 3** 的全栈论坛项目。v2.0 全面升级：bcrypt密码、双令牌、点赞收藏、分类标签、嵌套评论、通知系统、管理员权限、Markdown渲染、前端 Vue Router + Pinia 重构。
 
 ---
 
@@ -10,10 +10,12 @@
 |---|---|---|
 | **后端框架** | FastAPI | 0.136 |
 | **ORM** | SQLAlchemy 2.0 (async) | 2.0.50 |
-| **数据库** | MySQL (aiomysql 驱动) | — |
-| **认证** | JWT (python-jose, HS256) | 3.3.0 |
-| **前端框架** | Vue 3 (Composition API) | 3.5 |
-| **构建工具** | Vite | 8.0 |
+| **数据库** | MySQL (aiomysql) | — |
+| **密码哈希** | passlib + bcrypt | 1.7 |
+| **认证** | JWT 双令牌 (python-jose) | 3.3.0 |
+| **限流** | slowapi | 0.1 |
+| **前端框架** | Vue 3 + Vue Router + Pinia | 3.5 |
+| **构建工具** | Vite (含代理) | 8.0 |
 | **服务器** | Uvicorn | 0.48 |
 
 ---
