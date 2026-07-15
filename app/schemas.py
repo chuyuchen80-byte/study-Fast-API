@@ -111,6 +111,17 @@ class UserProfileResponse(BaseModel):
     comment_count: int = 0
 
 
+# v2.0 Bugfix: 前端 UserProfileView 期望 { user, posts, total } 嵌套结构
+# UserProfileResponse 只能做顶层响应，嵌套场景需要包装 Schema
+class UserProfileDetailResponse(BaseModel):
+    """用户主页完整响应：用户资料 + 帖子列表（分页）"""
+    user: UserProfileResponse
+    posts: list["PostResponse"] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+
+
 class Token(BaseModel):
     """
     登录成功后的响应：JWT access_token + refresh_token + 用户信息

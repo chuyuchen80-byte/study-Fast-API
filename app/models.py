@@ -48,6 +48,7 @@ from sqlalchemy import (
     Table,
     Text,
     Boolean,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -248,6 +249,10 @@ class PostImage(Base):
 #   3. Django 对比：类似 Django 的 ManyToManyField through 表
 class PostLike(Base):
     __tablename__ = "post_likes"
+    # 防并发重复点赞：数据库层面保证同一用户只能点赞同一帖子一次
+    __table_args__ = (
+        UniqueConstraint("user_id", "post_id", name="uq_post_likes_user_post"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(
@@ -274,6 +279,10 @@ class PostLike(Base):
 #   3. 前端 UI 独立："点赞"按钮和"收藏"按钮互不影响
 class PostFavorite(Base):
     __tablename__ = "post_favorites"
+    # 防并发重复收藏：数据库层面保证同一用户只能收藏同一帖子一次
+    __table_args__ = (
+        UniqueConstraint("user_id", "post_id", name="uq_post_fav_user_post"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(

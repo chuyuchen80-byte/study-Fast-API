@@ -40,6 +40,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from jose import JWTError, jwt
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.auth import (
     blacklist_token,
@@ -63,9 +64,11 @@ from app.database import get_db
 from app.models import Comment, Post, User
 from app.schemas import (
     PasswordUpdate,
+    PostResponse,
     Token,
     TokenRefreshRequest,
     UserLogin,
+    UserProfileDetailResponse,
     UserProfileResponse,
     UserRegister,
     UserResponse,
@@ -347,9 +350,13 @@ async def upload_avatar(
     await db.commit()
     await db.refresh(current_user)
 
+    # v2.0 bugfix: 返回完整 UserResponse 而非 {message, avatar_url}
+    # 前端 SettingsView 调用 auth.updateProfileLocal(data.user || data)
+    # 旧版 data.user 不存在 → fallback 到 {message, avatar_url} → 污染 store
     return {
         "message": "头像上传成功",
         "avatar_url": current_user.avatar_url,
+        "user": UserResponse.model_validate(current_user),
     }
 
 
@@ -407,11 +414,13 @@ async def refresh_token(
     if not db_user:
         raise HTTPException(status_code=401, detail="用户不存在或已被删除")
 
-    # ── 签发新的 access_token ──────────────────────────────
+    # ── 签发新的双令牌（同时续期 refresh_token）────────────────
     new_access_token = create_access_token({"sub": username})
+    new_refresh_token = create_refresh_token({"sub": username})
 
     return {
         "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "user": UserResponse.model_validate(db_user),
     }
@@ -421,60 +430,49 @@ async def refresh_token(
 # GET /user/{user_id} —— 用户公开资料（v2.0 新增）
 # =========================================================================
 
-@router.get("/{user_id}", response_model=UserProfileResponse)
+@router.get("/{user_id}", response_model=UserProfileDetailResponse)
 async def get_user_profile(
     user_id: int,
+    page: int = 1,
+    page_size: int = 20,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    获取指定用户的公开资料（公开接口）。
-
-    v2.0 新增端点。
-
-    返回内容：
-      - 用户基本信息（username / bio / avatar / is_admin）
-      - 统计数据（post_count / comment_count）
-
-    注意：不返回敏感信息（password_hash 不在响应中）。
-
-    使用场景：点击用户名 → 跳转个人主页 → 调用此接口获取用户信息
-
-    Django 对比：
-      User.objects.get(id=user_id)
-      Post.objects.filter(author_id=user_id).count()
-    """
-    # ── 查用户 ──────────────────────────────────────────────
+    """获取用户公开资料 + 帖子列表（公开，分页）"""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # ── 统计帖子数 ──────────────────────────────────────────
-    post_result = await db.execute(
+    # 统计
+    post_count = (await db.execute(
         select(func.count(Post.id)).where(Post.user_id == user_id)
-    )
-    post_count = post_result.scalar() or 0
-
-    # ── 统计评论数 ──────────────────────────────────────────
-    comment_result = await db.execute(
+    )).scalar() or 0
+    comment_count = (await db.execute(
         select(func.count(Comment.id)).where(Comment.user_id == user_id)
-    )
-    comment_count = comment_result.scalar() or 0
+    )).scalar() or 0
 
-    # 注意：前端 UserProfileView 期望 { user, posts } 结构
-    # 但 posts 需要分页，这里只返回 user 基础信息
+    # 查用户帖子（分页）
+    posts_result = await db.execute(
+        select(Post)
+        .options(joinedload(Post.user), joinedload(Post.images))
+        .where(Post.user_id == user_id)
+        .order_by(Post.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    posts = posts_result.unique().scalars().all()
+
     return {
         "user": UserProfileResponse(
-            id=user.id,
-            username=user.username,
-            bio=user.bio,
-            avatar_url=user.avatar_url,
+            id=user.id, username=user.username,
+            bio=user.bio, avatar_url=user.avatar_url,
             is_admin=user.is_admin,
-            post_count=post_count,
-            comment_count=comment_count,
+            post_count=post_count, comment_count=comment_count,
         ),
-        "posts": [],   # 前端 posts tab 会用单独的 API 加载
-        "total": 0,
+        "posts": [PostResponse.model_validate(p) for p in posts],
+        "total": post_count,
+        "page": page,
+        "page_size": page_size,
     }
 
 
@@ -565,16 +563,27 @@ async def toggle_admin(
 
 
 # =========================================================================
+# DELETE /user/me —— 删除当前账户（v2.0 bugfix 新增）
+# =========================================================================
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_current_user(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除当前登录用户的账户（需登录）。前端 SettingsView "危险区域"调用。"""
+    await db.delete(current_user)
+    await db.commit()
+    # 204 No Content — ORM cascade 自动清除关联的帖子/评论/点赞等
+
+
+# =========================================================================
 # GET /user/list —— 用户列表（保留旧端点，向后兼容）
 # =========================================================================
 
 @router.get("/list", response_model=list[UserResponse])
 async def list_users(db: AsyncSession = Depends(get_db)):
-    """
-    获取所有注册用户列表（公开接口，无分页）。
-
-    保留旧端点向后兼容。生产环境建议加分页。
-    """
+    """获取所有注册用户列表（公开接口，无分页）。保留旧端点向后兼容。"""
     result = await db.execute(select(User))
     users = result.scalars().all()
     return [UserResponse.model_validate(u) for u in users]

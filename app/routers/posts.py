@@ -58,7 +58,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from jose import JWTError, jwt
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update as sql_update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -540,14 +541,18 @@ async def create_post(
     if tags and tags.strip():
         tag_names = [t.strip() for t in tags.split(",") if t.strip()]
         for tag_name in tag_names:
-            # 查找已有标签（标签名唯一）
             tag_result = await db.execute(select(Tag).where(Tag.name == tag_name))
             tag_obj = tag_result.scalar_one_or_none()
             if not tag_obj:
-                tag_obj = Tag(name=tag_name)
-                db.add(tag_obj)
-                await db.flush()  # flush 生成 tag_id
-            # 直接插入 post_tags 中间表（不用 post.tags.append，避免 lazy load）
+                try:
+                    tag_obj = Tag(name=tag_name)
+                    db.add(tag_obj)
+                    await db.flush()
+                except IntegrityError:
+                    # 并发创建同名 tag：另一个请求刚创建了它
+                    await db.rollback()
+                    tag_result2 = await db.execute(select(Tag).where(Tag.name == tag_name))
+                    tag_obj = tag_result2.scalar_one()
             stmt = post_tags_table.insert().values(post_id=post.id, tag_id=tag_obj.id)
             await db.execute(stmt)
     await db.commit()
@@ -756,8 +761,13 @@ async def get_post(
 
     # ── 浏览量 +1（作者本人不计数）──────────────────────────
     if current_user is None or current_user.id != post.user_id:
-        # 直接 Python 层 +1（简单但有微小并发风险）
-        post.view_count += 1
+        # 原子 UPDATE：view_count = view_count + 1（避免并发竞态）
+        from sqlalchemy import update as sql_update
+        await db.execute(
+            sql_update(Post).where(Post.id == post_id).values(
+                view_count=Post.view_count + 1
+            )
+        )
         await db.commit()
         await db.refresh(post)
 
