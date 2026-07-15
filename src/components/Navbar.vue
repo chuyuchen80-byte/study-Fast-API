@@ -235,15 +235,6 @@ onUnmounted(() => {
               设置
             </router-link>
             <div class="dropdown-divider" />
-            <!-- 管理员专属菜单项 -->
-            <router-link
-              v-if="auth.isAdmin"
-              to="/admin"
-              class="dropdown-item dropdown-item-admin"
-              @click="closeUserMenu"
-            >
-              管理员面板
-            </router-link>
             <button
               class="dropdown-item dropdown-item-logout"
               @click="handleLogout"
@@ -331,15 +322,7 @@ onUnmounted(() => {
         >
           设置
         </router-link>
-        <router-link
-          v-if="auth.isAdmin"
-          to="/admin"
-          class="mobile-link mobile-link-admin"
-          @click="closeMenu"
-        >
-          管理员面板
-        </router-link>
-        <button class="mobile-link mobile-link-logout" @click="handleLogout">
+                <button class="mobile-link mobile-link-logout" @click="handleLogout">
           退出登录
         </button>
       </template>

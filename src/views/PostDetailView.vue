@@ -152,7 +152,7 @@ async function fetchPost() {
     // 如果登录，验证点赞状态
     if (auth.isLoggedIn) {
       try {
-        const { liked } = await postsApi.getLikeStatus(postId)
+        const { active: liked } = await postsApi.getLikeStatus(postId)
         isLiked.value = liked
       } catch {
         // 忽略
@@ -198,6 +198,7 @@ async function toggleLike() {
     // 回滚
     isLiked.value = wasLiked
     likeCount.value += wasLiked ? 1 : -1
+    error.value = '点赞失败，请重试'
   } finally {
     liking.value = false
   }
@@ -229,6 +230,7 @@ async function toggleFavorite() {
   } catch {
     isFavorited.value = wasFav
     favoriteCount.value += wasFav ? 1 : -1
+    error.value = '收藏失败，请重试'
   } finally {
     favoriting.value = false
   }

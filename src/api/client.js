@@ -77,11 +77,15 @@ export async function request(path, {
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    // 401 → 通知 auth store 清除登录状态
+    // 401 → 只清除 access_token（保留 refresh_token 供 restoreSession 刷新）
+    // 注意：不能直接调用 logout()！logout() 会同时清空 refreshToken，
+    // 导致 restoreSession 中的 token 刷新逻辑永远无法执行。
+    // restoreSession 是唯一拥有"退出决策权"的地方。
     if (response.status === 401) {
       try {
         const { useAuthStore } = await import('@/stores/auth')
-        useAuthStore().logout()
+        const auth = useAuthStore()
+        auth.token = ''  // 只清 access token，保留 refresh token
       } catch { /* store 未初始化 */ }
     }
     throw new Error(data.detail || `请求失败 (${response.status})`)

@@ -101,8 +101,8 @@ const isEditing = ref(false)
 
 // ── 删除状态 ──────────────────────────────────────────────
 
-/** 是否正在删除 */
-const isDeleting = ref(false)
+/** 正在删除中的评论 ID 集合（每个评论独立的 loading 状态） */
+const deletingIds = reactive(new Set())
 
 // ── 数据加载 ──────────────────────────────────────────────
 
@@ -266,7 +266,7 @@ async function saveEdit(commentId) {
 async function deleteComment(commentId) {
   if (!window.confirm('确定要删除这条评论吗？此操作不可撤销。')) return
 
-  isDeleting.value = true
+  deletingIds.add(commentId)
   error.value = ''
   try {
     await commentsApi.deleteComment(props.postId, commentId)
@@ -276,16 +276,11 @@ async function deleteComment(commentId) {
     )
     if (index >= 0) {
       const entry = comments.value[index]
-      // 如果是顶级评论，也需要移除其所有回复
       if (entry.depth === 0) {
-        // 从当前索引开始，移除直到下一个 depth=0 的项（或列表末尾）
         let end = index + 1
-        while (end < comments.value.length && comments.value[end].depth > 0) {
-          end++
-        }
+        while (end < comments.value.length && comments.value[end].depth > 0) end++
         comments.value.splice(index, end - index)
       } else {
-        // 单条回复直接移除
         comments.value.splice(index, 1)
       }
     }
@@ -293,7 +288,7 @@ async function deleteComment(commentId) {
   } catch (e) {
     error.value = e.message || '删除评论失败'
   } finally {
-    isDeleting.value = false
+    deletingIds.delete(commentId)
   }
 }
 
@@ -425,10 +420,10 @@ onMounted(() => {
           <button
             v-if="canDelete(item.comment)"
             class="btn-comment-action btn-comment-danger"
-            :disabled="isDeleting"
+            :disabled="deletingIds.has(item.comment.id)"
             @click="deleteComment(item.comment.id)"
           >
-            {{ isDeleting ? '删除中...' : '删除' }}
+            {{ deletingIds.has(item.comment.id) ? '删除中...' : '删除' }}
           </button>
         </div>
 

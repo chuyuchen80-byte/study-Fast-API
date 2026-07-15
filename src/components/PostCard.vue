@@ -75,13 +75,14 @@ const favoriting = ref(false)
 onMounted(async () => {
   // 同步后端已知数据作为初始值
   likeCount.value = props.post.like_count || 0
+  favoriteCount.value = props.post.favorite_count || 0
   isLiked.value = props.post.is_liked || false
   isFavorited.value = props.post.is_favorited || false
 
   // 如果已登录，从后端获取准确的点赞/收藏状态（覆盖列表接口的数据）
   if (auth.isLoggedIn) {
     try {
-      const { liked } = await postsApi.getLikeStatus(props.post.id)
+      const { active: liked } = await postsApi.getLikeStatus(props.post.id)
       isLiked.value = liked
     } catch {
       // 未登录或网络问题，忽略

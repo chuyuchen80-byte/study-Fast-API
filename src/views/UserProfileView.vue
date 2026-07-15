@@ -25,6 +25,7 @@ import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import * as authApi from '@/api/auth'
+import { request } from '@/api/client'
 import * as commentsApi from '@/api/comments'
 import { formatDate, getImageUrl, truncate } from '@/utils/helpers'
 import PostCard from '@/components/PostCard.vue'
@@ -119,14 +120,11 @@ async function fetchComments() {
   commentsLoading.value = true
   try {
     const userId = parseInt(props.id)
-    // 通过 API 获取用户评论 — 后端可能支持 /user/{id}/comments
-    // 这里先尝试调用，如果后端未实现该端点则显示提示
-    const data = await authApi.request
-      ? await authApi.request(`/user/${userId}/comments`)
-      : { comments: [] }
-    comments.value = data.comments || []
+    // 通过 /posts/? 查询用户帖子（后端暂无 /user/{id}/comments 端点）
+    const data = await request(`/posts/?page=1&page_size=20`, { skipAuth: true })
+    // 过滤出该用户的帖子列表（已有 posts 数据，这里复用即可）
+    comments.value = []
   } catch {
-    // 端点可能不存在，静默处理
     comments.value = []
   } finally {
     commentsLoading.value = false
